@@ -6,7 +6,7 @@
           <n-text class="eyebrow" depth="3">Daily Worklog</n-text>
           <n-h1 class="hero-title">Bảng kéo-thả log công việc mỗi ngày</n-h1>
           <n-text depth="3">
-            Kéo thả thẻ giữa các cột, chuyển tab để xem kế hoạch hôm nay, tuần này hoặc tương lai.
+            Kéo thả thẻ giữa các cột và lọc theo khoảng ngày để xem kế hoạch công việc.
           </n-text>
         </div>
         <div class="status">
@@ -45,14 +45,10 @@
         <section class="filters">
           <div class="filters-left">
             <div class="date-picker">
-              <span class="filters-label">Chọn ngày xem</span>
-              <n-date-picker v-model:value="selectedDate" type="date" size="medium" />
+              <span class="filters-label">Chọn khoảng ngày xem</span>
+              <n-date-picker v-model:value="selectedRange" type="daterange" size="medium" />
             </div>
-            <n-tabs v-model:value="viewTab" type="segment" size="small" animated>
-              <n-tab-pane name="today" tab="Hôm nay" />
-              <n-tab-pane name="week" tab="Tuần này" />
-              <n-tab-pane name="future" tab="Tương lai" />
-            </n-tabs>
+            <n-button size="small" secondary @click="setTodayRange">Hôm nay</n-button>
           </div>
           <n-alert
             v-if="importantSummary.count"
@@ -136,8 +132,6 @@ import {
   NAlert,
   NSwitch,
   NTag,
-  NTabs,
-  NTabPane,
   NText,
   type GlobalThemeOverrides
 } from "naive-ui";
@@ -172,8 +166,10 @@ const todayLabel = new Date().toLocaleDateString("vi-VN", {
 
 const newItemTitle = ref("");
 const dailyNote = ref("Ưu tiên: hoàn thành demo DailyWorkLog và gửi cập nhật EOD.");
-const selectedDate = ref<number | null>(Date.now());
-const viewTab = ref<"today" | "week" | "future">("today");
+const selectedRange = ref<[number, number] | null>([
+  startOfDay(new Date()).getTime(),
+  startOfDay(new Date()).getTime()
+]);
 const newItemDueDate = ref<number | null>(Date.now());
 const newItemImportant = ref(false);
 
@@ -241,14 +237,14 @@ const columns = reactive<WorkColumn[]>([
 ]);
 
 const importantSummary = computed(() => {
-  const baseDate = startOfDay(getSelectedDate());
-  const endDate = new Date(baseDate);
-  endDate.setDate(baseDate.getDate() + 3);
+  const { startDate } = getSelectedRange();
+  const endDate = new Date(startDate);
+  endDate.setDate(startDate.getDate() + 3);
   const items = columns.flatMap((column) => column.items);
   const upcoming = items
     .filter((item) => item.important && item.dueDate)
     .map((item) => ({ ...item, due: new Date(item.dueDate as string) }))
-    .filter((item) => item.due >= baseDate && item.due <= endDate)
+    .filter((item) => item.due >= startDate && item.due <= endDate)
     .sort((a, b) => a.due.getTime() - b.due.getTime());
   return {
     count: upcoming.length,
@@ -275,33 +271,48 @@ const themeOverrides: GlobalThemeOverrides = {
   }
 };
 
-function getSelectedDate() {
-  return selectedDate.value ? new Date(selectedDate.value) : new Date();
-}
-
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function endOfDay(date: Date) {
+  const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+  end.setMilliseconds(end.getMilliseconds() - 1);
+  return end;
 }
 
 function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function getSelectedRange() {
+  if (!selectedRange.value) {
+    const today = new Date();
+    return {
+      startDate: startOfDay(today),
+      endDate: endOfDay(today)
+    };
+  }
+  const [start, end] = selectedRange.value;
+  return {
+    startDate: startOfDay(new Date(start)),
+    endDate: endOfDay(new Date(end))
+  };
+}
+
+function setTodayRange() {
+  const today = new Date();
+  selectedRange.value = [startOfDay(today).getTime(), startOfDay(today).getTime()];
+}
+
 function isItemVisible(item: WorkItem) {
-  const baseDate = startOfDay(getSelectedDate());
-  const endOfToday = new Date(baseDate);
-  endOfToday.setDate(baseDate.getDate() + 1);
-  const endOfWeek = new Date(baseDate);
-  endOfWeek.setDate(baseDate.getDate() + 7);
-  if (!item.dueDate) return viewTab.value === "today";
+  const { startDate, endDate } = getSelectedRange();
+  if (!item.dueDate) return false;
   const due = new Date(item.dueDate);
-  if (viewTab.value === "today") {
-    return isSameDay(due, baseDate);
+  if (isSameDay(startDate, endDate)) {
+    return isSameDay(due, startDate);
   }
-  if (viewTab.value === "week") {
-    return due >= baseDate && due < endOfWeek;
-  }
-  return due >= endOfWeek;
+  return due >= startDate && due <= endDate;
 }
 
 function visibleCount(items: WorkItem[]) {
