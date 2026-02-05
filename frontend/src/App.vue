@@ -1,88 +1,135 @@
 <template>
-  <div class="app">
-    <header class="hero">
-      <div>
-        <p class="eyebrow">Daily Worklog AI</p>
-        <h1>Speech-to-worklog playground</h1>
-        <p class="subtitle">
-          Dùng nhanh ba prompt: Parse transcript, EOD summary, Smart Inbox. Backend chạy ở cổng 3001.
-        </p>
-      </div>
-      <div class="status">
-        <span :class="['badge', backendStatus]">{{ backendStatusLabel }}</span>
-        <button class="ghost" type="button" @click="checkBackend">Check backend</button>
-      </div>
-    </header>
+  <n-config-provider :theme-overrides="themeOverrides">
+    <n-layout class="app">
+      <n-layout-header class="hero" bordered>
+        <div>
+          <n-text class="eyebrow" depth="3">Daily Worklog AI</n-text>
+          <n-h1 class="hero-title">Speech-to-worklog playground</n-h1>
+          <n-text depth="3">
+            Dùng nhanh ba prompt: Parse transcript, EOD summary, Smart Inbox. Backend chạy ở cổng 3001.
+          </n-text>
+        </div>
+        <div class="status">
+          <n-tag :type="backendStatusType" size="small">{{ backendStatusLabel }}</n-tag>
+          <n-button secondary size="small" @click="checkBackend">Check backend</n-button>
+        </div>
+      </n-layout-header>
 
-    <section class="card">
-      <h2>Prompt 1 — Parse transcript</h2>
-      <div class="grid">
-        <label>
-          <span>Now (ISO)</span>
-          <input v-model="parseForm.now" type="text" placeholder="2024-07-05T09:00:00+08:00" />
-        </label>
-        <label>
-          <span>Known projects (JSON)</span>
-          <textarea v-model="parseForm.knownProjects" rows="3"></textarea>
-        </label>
-        <label>
-          <span>Known people (JSON)</span>
-          <textarea v-model="parseForm.knownPeople" rows="3"></textarea>
-        </label>
-        <label class="full">
-          <span>Transcript</span>
-          <textarea v-model="parseForm.transcript" rows="4" placeholder="Ví dụ: Đã fix xong bug login hôm nay, mai làm report."></textarea>
-        </label>
-      </div>
-      <div class="actions">
-        <button type="button" @click="runParse">Parse</button>
-      </div>
-      <pre class="output" v-if="parseOutput">{{ parseOutput }}</pre>
-    </section>
+      <n-layout-content class="content">
+        <n-grid x-gap="16" y-gap="16" cols="1 900:2">
+          <n-grid-item>
+            <n-card title="Prompt 1 — Parse transcript" class="card" :bordered="false">
+              <n-form label-placement="top" :show-feedback="false">
+                <n-grid x-gap="16" y-gap="12" cols="1 640:2">
+                  <n-grid-item>
+                    <n-form-item label="Now (ISO)">
+                      <n-input v-model:value="parseForm.now" placeholder="2024-07-05T09:00:00+08:00" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="Known projects (JSON)">
+                      <n-input v-model:value="parseForm.knownProjects" type="textarea" :autosize="{ minRows: 3 }" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="Known people (JSON)">
+                      <n-input v-model:value="parseForm.knownPeople" type="textarea" :autosize="{ minRows: 3 }" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item span="2">
+                    <n-form-item label="Transcript">
+                      <n-input
+                        v-model:value="parseForm.transcript"
+                        type="textarea"
+                        :autosize="{ minRows: 4 }"
+                        placeholder="Ví dụ: Đã fix xong bug login hôm nay, mai làm report."
+                      />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+              </n-form>
+              <div class="actions">
+                <n-button type="primary" @click="runParse">Parse</n-button>
+              </div>
+              <n-code v-if="parseOutput" :code="parseOutput" language="json" class="output" />
+            </n-card>
+          </n-grid-item>
 
-    <section class="card">
-      <h2>Prompt 2 — EOD summary</h2>
-      <div class="grid">
-        <label>
-          <span>Date</span>
-          <input v-model="summaryForm.date" type="date" />
-        </label>
-        <label class="full">
-          <span>Items JSON</span>
-          <textarea v-model="summaryForm.items" rows="4"></textarea>
-        </label>
-      </div>
-      <div class="actions">
-        <button type="button" @click="runSummary">Generate summary</button>
-      </div>
-      <pre class="output" v-if="summaryOutput">{{ summaryOutput }}</pre>
-    </section>
+          <n-grid-item>
+            <n-card title="Prompt 2 — EOD summary" class="card" :bordered="false">
+              <n-form label-placement="top" :show-feedback="false">
+                <n-grid x-gap="16" y-gap="12" cols="1">
+                  <n-grid-item>
+                    <n-form-item label="Date">
+                      <n-input v-model:value="summaryForm.date" type="date" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="Items JSON">
+                      <n-input v-model:value="summaryForm.items" type="textarea" :autosize="{ minRows: 4 }" />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+              </n-form>
+              <div class="actions">
+                <n-button type="primary" @click="runSummary">Generate summary</n-button>
+              </div>
+              <n-code v-if="summaryOutput" :code="summaryOutput" language="json" class="output" />
+            </n-card>
+          </n-grid-item>
 
-    <section class="card">
-      <h2>Prompt 3 — Smart Inbox</h2>
-      <div class="grid">
-        <label class="full">
-          <span>Item JSON</span>
-          <textarea v-model="inboxForm.item" rows="3"></textarea>
-        </label>
-        <label>
-          <span>Known projects (JSON)</span>
-          <textarea v-model="inboxForm.knownProjects" rows="3"></textarea>
-        </label>
-        <label>
-          <span>Recent items (JSON)</span>
-          <textarea v-model="inboxForm.recentItems" rows="3"></textarea>
-        </label>
-      </div>
-      <div class="actions">
-        <button type="button" @click="runInbox">Suggest action</button>
-      </div>
-      <pre class="output" v-if="inboxOutput">{{ inboxOutput }}</pre>
-    </section>
-  </div>
+          <n-grid-item span="2">
+            <n-card title="Prompt 3 — Smart Inbox" class="card" :bordered="false">
+              <n-form label-placement="top" :show-feedback="false">
+                <n-grid x-gap="16" y-gap="12" cols="1 700:3">
+                  <n-grid-item span="2">
+                    <n-form-item label="Item JSON">
+                      <n-input v-model:value="inboxForm.item" type="textarea" :autosize="{ minRows: 3 }" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="Known projects (JSON)">
+                      <n-input v-model:value="inboxForm.knownProjects" type="textarea" :autosize="{ minRows: 3 }" />
+                    </n-form-item>
+                  </n-grid-item>
+                  <n-grid-item>
+                    <n-form-item label="Recent items (JSON)">
+                      <n-input v-model:value="inboxForm.recentItems" type="textarea" :autosize="{ minRows: 3 }" />
+                    </n-form-item>
+                  </n-grid-item>
+                </n-grid>
+              </n-form>
+              <div class="actions">
+                <n-button type="primary" @click="runInbox">Suggest action</n-button>
+              </div>
+              <n-code v-if="inboxOutput" :code="inboxOutput" language="json" class="output" />
+            </n-card>
+          </n-grid-item>
+        </n-grid>
+      </n-layout-content>
+    </n-layout>
+  </n-config-provider>
 </template>
 
 <script setup lang="ts">
+import {
+  NButton,
+  NCard,
+  NCode,
+  NConfigProvider,
+  NForm,
+  NFormItem,
+  NGrid,
+  NGridItem,
+  NH1,
+  NInput,
+  NLayout,
+  NLayoutContent,
+  NLayoutHeader,
+  NTag,
+  NText,
+  type GlobalThemeOverrides
+} from "naive-ui";
 import { computed, reactive, ref } from "vue";
 
 const backendStatus = ref<"idle" | "online" | "offline">("idle");
@@ -114,6 +161,30 @@ const backendStatusLabel = computed(() => {
   if (backendStatus.value === "offline") return "Backend offline";
   return "Backend unknown";
 });
+
+const backendStatusType = computed(() => {
+  if (backendStatus.value === "online") return "success";
+  if (backendStatus.value === "offline") return "error";
+  return "default";
+});
+
+const themeOverrides: GlobalThemeOverrides = {
+  common: {
+    primaryColor: "#2563eb",
+    primaryColorHover: "#1d4ed8",
+    borderRadius: "14px"
+  },
+  Card: {
+    borderRadius: "18px",
+    color: "#ffffff"
+  },
+  Input: {
+    borderRadius: "12px"
+  },
+  Button: {
+    borderRadius: "12px"
+  }
+};
 
 async function checkBackend() {
   try {
@@ -193,143 +264,61 @@ function prettyJson(raw: string) {
 :global(body) {
   margin: 0;
   font-family: "Inter", system-ui, sans-serif;
-  background: #f5f7fb;
-  color: #162238;
+  background: #f3f4f6;
+  color: #111827;
 }
 
 .app {
-  max-width: 1000px;
-  margin: 0 auto;
-  padding: 32px 24px 64px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+  min-height: 100vh;
+  background: radial-gradient(circle at top, #eef2ff 0%, #f8fafc 55%, #f3f4f6 100%);
 }
 
 .hero {
-  background: white;
-  padding: 24px;
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  padding: 32px 32px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 24px;
+  background: transparent;
+}
+
+.hero-title {
+  margin: 8px 0 6px;
+  font-weight: 700;
 }
 
 .eyebrow {
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   letter-spacing: 0.2em;
-  color: #5f6b7c;
-  margin: 0 0 8px;
   text-transform: uppercase;
-}
-
-h1 {
-  margin: 0 0 8px;
-  font-size: 28px;
-}
-
-.subtitle {
-  margin: 0;
-  color: #4a5568;
 }
 
 .status {
   display: flex;
   flex-direction: column;
-  gap: 12px;
   align-items: flex-end;
+  gap: 10px;
 }
 
-.badge {
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  background: #e2e8f0;
-  color: #3b4b63;
-}
-
-.badge.online {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.badge.offline {
-  background: #fee2e2;
-  color: #991b1b;
+.content {
+  padding: 0 32px 48px;
 }
 
 .card {
-  background: white;
-  padding: 24px;
-  border-radius: 16px;
-  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #4a5568;
-}
-
-label.full {
-  grid-column: 1 / -1;
-}
-
-input,
-textarea {
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid #cbd5f5;
-  font-size: 14px;
-  font-family: "Inter", system-ui, sans-serif;
-}
-
-textarea {
-  resize: vertical;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
 }
 
 .actions {
   display: flex;
   justify-content: flex-end;
-}
-
-button {
-  border: none;
-  background: #2563eb;
-  color: white;
-  padding: 10px 18px;
-  border-radius: 10px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button.ghost {
-  background: #e2e8f0;
-  color: #1f2937;
+  margin-top: 8px;
 }
 
 .output {
+  margin-top: 16px;
+  border-radius: 12px;
   background: #0f172a;
   color: #e2e8f0;
-  padding: 16px;
-  border-radius: 12px;
-  font-size: 12px;
-  overflow-x: auto;
 }
 </style>
