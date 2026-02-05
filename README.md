@@ -16,6 +16,10 @@ npm install
 npm run dev
 ```
 
+**Default demo account**
+- Email: `demo@dailyworklog.vn`
+- Password: `password123`
+
 ### Frontend
 ```bash
 cd frontend
