@@ -67,9 +67,8 @@
             <header class="lane-header">
               <div>
                 <n-text class="lane-title">{{ column.title }}</n-text>
-                <n-text depth="3" class="lane-subtitle">{{ column.subtitle }}</n-text>
               </div>
-              <n-tag size="small" round>{{ column.items.length }}</n-tag>
+              <n-tag size="small" round>{{ visibleCount(column.items) }}</n-tag>
             </header>
 
             <Draggable
@@ -135,7 +134,7 @@ import {
   NText,
   type GlobalThemeOverrides
 } from "naive-ui";
-import { computed, reactive, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import Draggable from "vuedraggable";
 
 type WorkItem = {
@@ -153,9 +152,10 @@ type WorkItem = {
 type WorkColumn = {
   id: string;
   title: string;
-  subtitle: string;
   items: WorkItem[];
 };
+
+const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:3001";
 
 const todayLabel = new Date().toLocaleDateString("vi-VN", {
   weekday: "long",
@@ -173,74 +173,13 @@ const selectedRange = ref<[number, number] | null>([
 const newItemDueDate = ref<number | null>(Date.now());
 const newItemImportant = ref(false);
 
-const columns = reactive<WorkColumn[]>([
-  {
-    id: "backlog",
-    title: "Cần làm",
-    subtitle: "Mới nhận",
-    items: [
-      {
-        id: "item-1",
-        title: "Chuẩn bị checklist kickoff dự án",
-        meta: "Gọi khách hàng, note yêu cầu chính",
-        assignee: "You",
-        time: "09:15",
-        tag: "High",
-        tagType: "warning",
-        dueDate: new Date().toISOString(),
-        important: true
-      },
-      {
-        id: "item-2",
-        title: "Review bản thiết kế UI/UX",
-        meta: "Figma: Mobile + Desktop",
-        assignee: "You",
-        time: "10:30",
-        tag: "Design",
-        tagType: "info",
-        dueDate: new Date(Date.now() + 86400000).toISOString()
-      }
-    ]
-  },
-  {
-    id: "doing",
-    title: "Đang làm",
-    subtitle: "Đang xử lý",
-    items: [
-      {
-        id: "item-3",
-        title: "Tối ưu flow check-in DailyWorkLog",
-        meta: "Kéo thả, thêm nhanh, gợi ý timeline",
-        assignee: "You",
-        time: "11:00",
-        tag: "Focus",
-        tagType: "success",
-        dueDate: new Date(Date.now() + 2 * 86400000).toISOString()
-      }
-    ]
-  },
-  {
-    id: "done",
-    title: "Hoàn tất",
-    subtitle: "Xong hôm nay",
-    items: [
-      {
-        id: "item-4",
-        title: "Sync nhanh với team backend",
-        meta: "Cập nhật API & timeline",
-        assignee: "You",
-        time: "08:45",
-        dueDate: new Date(Date.now() - 86400000).toISOString()
-      }
-    ]
-  }
-]);
+const columns = ref<WorkColumn[]>([]);
 
 const importantSummary = computed(() => {
   const { startDate } = getSelectedRange();
   const endDate = new Date(startDate);
   endDate.setDate(startDate.getDate() + 3);
-  const items = columns.flatMap((column) => column.items);
+  const items = columns.value.flatMap((column) => column.items);
   const upcoming = items
     .filter((item) => item.important && item.dueDate)
     .map((item) => ({ ...item, due: new Date(item.dueDate as string) }))
@@ -326,6 +265,7 @@ function formatDate(value: string) {
 function addItem() {
   const title = newItemTitle.value.trim();
   if (!title) return;
+  if (!columns.value.length) return;
   const item: WorkItem = {
     id: `item-${Date.now()}`,
     title,
@@ -337,18 +277,48 @@ function addItem() {
     dueDate: newItemDueDate.value ? new Date(newItemDueDate.value).toISOString() : undefined,
     important: newItemImportant.value
   };
-  columns[0].items.unshift(item);
+  columns.value[0].items.unshift(item);
   newItemTitle.value = "";
 }
 
 function exportLog() {
-  const snapshot = columns.map((column) => ({
+  const snapshot = columns.value.map((column) => ({
     column: column.title,
     items: column.items.map((item) => item.title)
   }));
   const summary = JSON.stringify({ date: todayLabel, note: dailyNote.value, snapshot }, null, 2);
   navigator.clipboard?.writeText(summary);
 }
+
+async function loadColumns() {
+  try {
+    const { startDate, endDate } = getSelectedRange();
+    const lookahead = new Date(startDate);
+    lookahead.setDate(startDate.getDate() + 3);
+    const apiEnd = endDate > lookahead ? endDate : lookahead;
+    const params = new URLSearchParams({
+      start: startDate.toISOString(),
+      end: apiEnd.toISOString()
+    });
+    const response = await fetch(`${API_BASE}/worklog?${params.toString()}`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch worklog");
+    }
+    const data = await response.json();
+    columns.value = data.columns ?? [];
+  } catch (error) {
+    console.error(error);
+    columns.value = [];
+  }
+}
+
+watch(selectedRange, () => {
+  loadColumns();
+});
+
+onMounted(() => {
+  loadColumns();
+});
 </script>
 
 <style scoped>
@@ -511,9 +481,6 @@ function exportLog() {
   font-size: 16px;
 }
 
-.lane-subtitle {
-  font-size: 12px;
-}
 
 .lane-body {
   display: flex;
