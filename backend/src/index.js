@@ -346,6 +346,106 @@ function smartInbox({ item, known_projects, recent_items }) {
   };
 }
 
+const WORKLOG_COLUMNS = [
+  {
+    id: "backlog",
+    title: "Cần làm",
+    items: [
+      {
+        id: "item-1",
+        title: "Chuẩn bị checklist kickoff dự án",
+        meta: "Gọi khách hàng, note yêu cầu chính",
+        assignee: "You",
+        time: "09:15",
+        tag: "High",
+        tagType: "warning",
+        dueOffsetDays: 0,
+        important: true
+      },
+      {
+        id: "item-2",
+        title: "Review bản thiết kế UI/UX",
+        meta: "Figma: Mobile + Desktop",
+        assignee: "You",
+        time: "10:30",
+        tag: "Design",
+        tagType: "info",
+        dueOffsetDays: 1
+      }
+    ]
+  },
+  {
+    id: "doing",
+    title: "Đang làm",
+    items: [
+      {
+        id: "item-3",
+        title: "Tối ưu flow check-in DailyWorkLog",
+        meta: "Kéo thả, thêm nhanh, gợi ý timeline",
+        assignee: "You",
+        time: "11:00",
+        tag: "Focus",
+        tagType: "success",
+        dueOffsetDays: 2
+      }
+    ]
+  },
+  {
+    id: "done",
+    title: "Hoàn tất",
+    items: [
+      {
+        id: "item-4",
+        title: "Sync nhanh với team backend",
+        meta: "Cập nhật API & timeline",
+        assignee: "You",
+        time: "08:45",
+        dueOffsetDays: -1
+      }
+    ]
+  }
+];
+
+function buildWorklogColumns(now) {
+  const base = dayjs.tz(now, TIMEZONE);
+  return WORKLOG_COLUMNS.map((column) => ({
+    id: column.id,
+    title: column.title,
+    items: column.items.map((item) => ({
+      id: item.id,
+      title: item.title,
+      meta: item.meta,
+      assignee: item.assignee,
+      time: item.time,
+      tag: item.tag,
+      tagType: item.tagType,
+      dueDate: base.add(item.dueOffsetDays, "day").toISOString(),
+      important: item.important ?? false
+    }))
+  }));
+}
+
+function filterColumnsByRange(columns, start, end) {
+  if (!start || !end) return columns;
+  return columns.map((column) => ({
+    ...column,
+    items: column.items.filter((item) => {
+      if (!item.dueDate) return false;
+      const due = dayjs(item.dueDate);
+      return (due.isAfter(start) || due.isSame(start)) && (due.isBefore(end) || due.isSame(end));
+    })
+  }));
+}
+
+app.get("/worklog", (req, res) => {
+  const { start, end } = req.query ?? {};
+  const startDate = start ? dayjs(start) : null;
+  const endDate = end ? dayjs(end) : null;
+  const columns = buildWorklogColumns(new Date().toISOString());
+  const filtered = filterColumnsByRange(columns, startDate, endDate);
+  return res.json({ columns: filtered });
+});
+
 app.post("/parse", (req, res) => {
   const { now, transcript, known_projects = [], known_people = [] } = req.body ?? {};
   if (!now || !transcript) {
