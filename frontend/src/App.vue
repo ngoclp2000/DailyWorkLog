@@ -4,14 +4,14 @@
       <n-layout-header class="hero" bordered>
         <div class="hero-copy">
           <n-text class="eyebrow" depth="3">Daily Worklog</n-text>
-          <n-h1 class="hero-title">Bảng kéo-thả log công việc mỗi ngày</n-h1>
+          <n-h1 class="hero-title">Bảng kéo-thả công việc mỗi ngày</n-h1>
           <n-text depth="3">
-            Kéo thả thẻ giữa các cột và lọc theo khoảng ngày để xem kế hoạch công việc.
+            Kéo thả thẻ giữa các cột và lọc theo ngày để theo dõi tiến độ.
           </n-text>
         </div>
         <div class="status">
           <n-tag type="info" size="small">Hôm nay: {{ todayLabel }}</n-tag>
-          <n-button secondary size="small" @click="exportLog">Export log</n-button>
+          <n-button secondary size="small" @click="exportLog">Xuất báo cáo</n-button>
         </div>
       </n-layout-header>
 
@@ -176,8 +176,8 @@ const newItemImportant = ref(false);
 const columns = reactive<WorkColumn[]>([
   {
     id: "backlog",
-    title: "Inbox",
-    subtitle: "Việc mới cần làm rõ",
+    title: "Cần làm",
+    subtitle: "Mới nhận",
     items: [
       {
         id: "item-1",
@@ -205,7 +205,7 @@ const columns = reactive<WorkColumn[]>([
   {
     id: "doing",
     title: "Đang làm",
-    subtitle: "Việc đang chạy",
+    subtitle: "Đang xử lý",
     items: [
       {
         id: "item-3",
@@ -221,8 +221,8 @@ const columns = reactive<WorkColumn[]>([
   },
   {
     id: "done",
-    title: "Hoàn thành",
-    subtitle: "Việc đã xong hôm nay",
+    title: "Hoàn tất",
+    subtitle: "Xong hôm nay",
     items: [
       {
         id: "item-4",
