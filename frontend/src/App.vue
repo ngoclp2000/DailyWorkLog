@@ -2,11 +2,11 @@
   <n-config-provider :theme-overrides="themeOverrides">
     <n-layout class="app">
       <n-layout-header class="hero" bordered>
-        <div>
+        <div class="hero-copy">
           <n-text class="eyebrow" depth="3">Daily Worklog</n-text>
           <n-h1 class="hero-title">Bảng kéo-thả log công việc mỗi ngày</n-h1>
           <n-text depth="3">
-            Kéo thả thẻ sang các cột để cập nhật trạng thái. Ghi chú nhanh ở header và xuất log cuối ngày.
+            Kéo thả thẻ giữa các cột, chuyển tab để xem kế hoạch hôm nay, tuần này hoặc tương lai.
           </n-text>
         </div>
         <div class="status">
@@ -24,15 +24,51 @@
               size="large"
             />
             <n-button type="primary" size="large" @click="addItem">Thêm việc</n-button>
+            <div class="quick-controls">
+              <n-date-picker v-model:value="newItemDueDate" type="date" size="large" />
+              <div class="important-toggle">
+                <span class="toggle-label">Quan trọng</span>
+                <n-switch v-model:value="newItemImportant" size="medium" />
+              </div>
+            </div>
           </div>
           <div class="toolbar-right">
-            <n-input v-model:value="dailyNote" type="textarea" :autosize="{ minRows: 2, maxRows: 3 }" />
+            <n-input
+              v-model:value="dailyNote"
+              type="textarea"
+              placeholder="Ghi chú nhanh về mục tiêu hôm nay, blockers, hoặc kế hoạch tương lai"
+              :autosize="{ minRows: 2, maxRows: 3 }"
+            />
           </div>
+        </section>
+
+        <section class="filters">
+          <div class="filters-left">
+            <div class="date-picker">
+              <span class="filters-label">Chọn ngày xem</span>
+              <n-date-picker v-model:value="selectedDate" type="date" size="medium" />
+            </div>
+            <n-tabs v-model:value="viewTab" type="segment" size="small" animated>
+              <n-tab-pane name="today" tab="Hôm nay" />
+              <n-tab-pane name="week" tab="Tuần này" />
+              <n-tab-pane name="future" tab="Tương lai" />
+            </n-tabs>
+          </div>
+          <n-alert
+            v-if="importantSummary.count"
+            type="warning"
+            class="important-alert"
+            title="Việc quan trọng sắp tới"
+            closable
+          >
+            Có {{ importantSummary.count }} việc quan trọng trong 3 ngày tới (gần nhất:
+            {{ importantSummary.nearest }}).
+          </n-alert>
         </section>
 
         <section class="board">
           <article
-            v-for="column in columns"
+            v-for="column in filteredColumns"
             :key="column.id"
             class="lane"
             :class="{ 'lane--over': dragOverColumn === column.id }"
@@ -48,7 +84,7 @@
               <n-tag size="small" round>{{ column.items.length }}</n-tag>
             </header>
 
-            <div class="lane-body">
+            <transition-group name="card" tag="div" class="lane-body">
               <n-card
                 v-for="item in column.items"
                 :key="item.id"
@@ -60,18 +96,26 @@
               >
                 <div class="card-header">
                   <n-text class="card-title">{{ item.title }}</n-text>
-                  <n-tag v-if="item.tag" size="tiny" :type="item.tagType">{{ item.tag }}</n-tag>
+                  <div class="card-tags">
+                    <n-tag v-if="item.important" size="tiny" type="error">Quan trọng</n-tag>
+                    <n-tag v-if="item.tag" size="tiny" :type="item.tagType">{{ item.tag }}</n-tag>
+                  </div>
                 </div>
                 <n-text depth="3" class="card-meta">{{ item.meta }}</n-text>
                 <div class="card-footer">
                   <n-tag size="small" type="info" round>{{ item.assignee }}</n-tag>
-                  <n-text depth="3">{{ item.time }}</n-text>
+                  <div class="card-due">
+                    <n-tag v-if="item.dueDate" size="tiny" type="warning">
+                      {{ formatDate(item.dueDate) }}
+                    </n-tag>
+                    <n-text depth="3">{{ item.time }}</n-text>
+                  </div>
                 </div>
               </n-card>
               <div v-if="!column.items.length" class="empty-state">
                 <n-text depth="3">Kéo thả thẻ vào đây</n-text>
               </div>
-            </div>
+            </transition-group>
           </article>
         </section>
       </n-layout-content>
@@ -89,11 +133,16 @@ import {
   NLayout,
   NLayoutContent,
   NLayoutHeader,
+  NDatePicker,
+  NAlert,
+  NSwitch,
   NTag,
+  NTabs,
+  NTabPane,
   NText,
   type GlobalThemeOverrides
 } from "naive-ui";
-import { reactive, ref } from "vue";
+import { computed, reactive, ref } from "vue";
 
 type WorkItem = {
   id: string;
@@ -103,6 +152,8 @@ type WorkItem = {
   time: string;
   tag?: string;
   tagType?: "info" | "success" | "warning" | "error";
+  dueDate?: string;
+  important?: boolean;
 };
 
 type WorkColumn = {
@@ -122,6 +173,10 @@ const todayLabel = new Date().toLocaleDateString("vi-VN", {
 const newItemTitle = ref("");
 const dailyNote = ref("Ưu tiên: hoàn thành demo DailyWorkLog và gửi cập nhật EOD.");
 const dragOverColumn = ref<string | null>(null);
+const selectedDate = ref<number | null>(Date.now());
+const viewTab = ref<"today" | "week" | "future">("today");
+const newItemDueDate = ref<number | null>(Date.now());
+const newItemImportant = ref(false);
 
 const columns = reactive<WorkColumn[]>([
   {
@@ -136,7 +191,9 @@ const columns = reactive<WorkColumn[]>([
         assignee: "You",
         time: "09:15",
         tag: "High",
-        tagType: "warning"
+        tagType: "warning",
+        dueDate: new Date().toISOString(),
+        important: true
       },
       {
         id: "item-2",
@@ -145,7 +202,8 @@ const columns = reactive<WorkColumn[]>([
         assignee: "You",
         time: "10:30",
         tag: "Design",
-        tagType: "info"
+        tagType: "info",
+        dueDate: new Date(Date.now() + 86400000).toISOString()
       }
     ]
   },
@@ -161,7 +219,8 @@ const columns = reactive<WorkColumn[]>([
         assignee: "You",
         time: "11:00",
         tag: "Focus",
-        tagType: "success"
+        tagType: "success",
+        dueDate: new Date(Date.now() + 2 * 86400000).toISOString()
       }
     ]
   },
@@ -175,17 +234,42 @@ const columns = reactive<WorkColumn[]>([
         title: "Sync nhanh với team backend",
         meta: "Cập nhật API & timeline",
         assignee: "You",
-        time: "08:45"
+        time: "08:45",
+        dueDate: new Date(Date.now() - 86400000).toISOString()
       }
     ]
   }
 ]);
 
+const filteredColumns = computed(() => {
+  return columns.map((column) => ({
+    ...column,
+    items: filterItems(column.items)
+  }));
+});
+
+const importantSummary = computed(() => {
+  const baseDate = startOfDay(getSelectedDate());
+  const endDate = new Date(baseDate);
+  endDate.setDate(baseDate.getDate() + 3);
+  const items = columns.flatMap((column) => column.items);
+  const upcoming = items
+    .filter((item) => item.important && item.dueDate)
+    .map((item) => ({ ...item, due: new Date(item.dueDate as string) }))
+    .filter((item) => item.due >= baseDate && item.due <= endDate)
+    .sort((a, b) => a.due.getTime() - b.due.getTime());
+  return {
+    count: upcoming.length,
+    nearest: upcoming[0] ? formatDate(upcoming[0].dueDate as string) : ""
+  };
+});
+
 const themeOverrides: GlobalThemeOverrides = {
   common: {
     primaryColor: "#2563eb",
     primaryColorHover: "#1d4ed8",
-    borderRadius: "14px"
+    borderRadius: "14px",
+    fontFamily: "\"Plus Jakarta Sans\", \"Inter\", system-ui, sans-serif"
   },
   Card: {
     borderRadius: "18px",
@@ -198,6 +282,41 @@ const themeOverrides: GlobalThemeOverrides = {
     borderRadius: "12px"
   }
 };
+
+function getSelectedDate() {
+  return selectedDate.value ? new Date(selectedDate.value) : new Date();
+}
+
+function startOfDay(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isSameDay(a: Date, b: Date) {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function filterItems(items: WorkItem[]) {
+  const baseDate = startOfDay(getSelectedDate());
+  const endOfToday = new Date(baseDate);
+  endOfToday.setDate(baseDate.getDate() + 1);
+  const endOfWeek = new Date(baseDate);
+  endOfWeek.setDate(baseDate.getDate() + 7);
+  return items.filter((item) => {
+    if (!item.dueDate) return viewTab.value === "today";
+    const due = new Date(item.dueDate);
+    if (viewTab.value === "today") {
+      return isSameDay(due, baseDate);
+    }
+    if (viewTab.value === "week") {
+      return due >= baseDate && due < endOfWeek;
+    }
+    return due >= endOfWeek;
+  });
+}
+
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
+}
 
 function onDragStart(event: DragEvent, itemId: string, columnId: string) {
   const payload = JSON.stringify({ itemId, columnId });
@@ -246,7 +365,9 @@ function addItem() {
     assignee: "You",
     time: new Date().toLocaleTimeString("vi-VN", { hour: "2-digit", minute: "2-digit" }),
     tag: "New",
-    tagType: "info"
+    tagType: "info",
+    dueDate: newItemDueDate.value ? new Date(newItemDueDate.value).toISOString() : undefined,
+    important: newItemImportant.value
   };
   columns[0].items.unshift(item);
   newItemTitle.value = "";
@@ -265,14 +386,14 @@ function exportLog() {
 <style scoped>
 :global(body) {
   margin: 0;
-  font-family: "Inter", system-ui, sans-serif;
-  background: #f3f4f6;
-  color: #111827;
+  font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  background: #eef2ff;
+  color: #0f172a;
 }
 
 .app {
   min-height: 100vh;
-  background: radial-gradient(circle at top, #eef2ff 0%, #f8fafc 55%, #f3f4f6 100%);
+  background: radial-gradient(circle at top, #e0e7ff 0%, #f8fafc 55%, #eef2ff 100%);
 }
 
 .hero {
@@ -284,9 +405,14 @@ function exportLog() {
   background: transparent;
 }
 
+.hero-copy {
+  max-width: 640px;
+}
+
 .hero-title {
   margin: 8px 0 6px;
   font-weight: 700;
+  font-size: clamp(26px, 3vw, 34px);
 }
 
 .eyebrow {
@@ -309,20 +435,76 @@ function exportLog() {
 
 .toolbar {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  gap: 16px;
-  margin-bottom: 24px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-bottom: 18px;
 }
 
 .toolbar-left {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .toolbar-right :deep(textarea) {
   border-radius: 12px;
   min-height: 72px;
+}
+
+.quick-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.important-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.3);
+}
+
+.toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.filters {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+
+.filters-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.filters-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.date-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.important-alert {
+  max-width: 360px;
+  border-radius: 16px;
 }
 
 .board {
@@ -332,18 +514,19 @@ function exportLog() {
 }
 
 .lane {
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.92);
   border-radius: 18px;
   padding: 16px;
   min-height: 420px;
-  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-  transition: border 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+  transition: border 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
   border: 2px dashed transparent;
 }
 
 .lane--over {
   border-color: rgba(37, 99, 235, 0.6);
   box-shadow: 0 16px 40px rgba(37, 99, 235, 0.12);
+  transform: translateY(-2px);
 }
 
 .lane-header {
@@ -371,9 +554,10 @@ function exportLog() {
 
 .work-card {
   cursor: grab;
-  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.1);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
   border-radius: 16px;
   padding: 12px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
 }
 
 .work-card:active {
@@ -391,6 +575,13 @@ function exportLog() {
   font-weight: 600;
 }
 
+.card-tags {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .card-meta {
   font-size: 13px;
   margin-bottom: 12px;
@@ -403,11 +594,32 @@ function exportLog() {
   font-size: 12px;
 }
 
+.card-due {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .empty-state {
   border: 2px dashed rgba(148, 163, 184, 0.5);
   border-radius: 14px;
   padding: 18px;
   text-align: center;
+}
+
+.card-enter-active,
+.card-leave-active {
+  transition: all 0.3s ease;
+}
+
+.card-enter-from,
+.card-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
+}
+
+.card-move {
+  transition: transform 0.3s ease;
 }
 
 @media (max-width: 900px) {
@@ -424,6 +636,11 @@ function exportLog() {
   }
 
   .toolbar-left {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .quick-controls {
     flex-direction: column;
     align-items: stretch;
   }
