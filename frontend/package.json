@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "naive-ui": "^2.38.0",
+    "vuedraggable": "^4.1.0",
     "vue": "^3.4.31"
   },
   "devDependencies": {

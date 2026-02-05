@@ -67,15 +67,7 @@
         </section>
 
         <section class="board">
-          <article
-            v-for="column in filteredColumns"
-            :key="column.id"
-            class="lane"
-            :class="{ 'lane--over': dragOverColumn === column.id }"
-            @dragover.prevent="onDragOver(column.id)"
-            @dragleave="onDragLeave"
-            @drop="onDrop($event, column.id)"
-          >
+          <article v-for="column in columns" :key="column.id" class="lane">
             <header class="lane-header">
               <div>
                 <n-text class="lane-title">{{ column.title }}</n-text>
@@ -84,38 +76,45 @@
               <n-tag size="small" round>{{ column.items.length }}</n-tag>
             </header>
 
-            <transition-group name="card" tag="div" class="lane-body">
-              <n-card
-                v-for="item in column.items"
-                :key="item.id"
-                class="work-card"
-                :bordered="false"
-                draggable="true"
-                @dragstart="onDragStart($event, item.id, column.id)"
-                @dragend="onDragEnd"
-              >
-                <div class="card-header">
-                  <n-text class="card-title">{{ item.title }}</n-text>
-                  <div class="card-tags">
-                    <n-tag v-if="item.important" size="tiny" type="error">Quan trọng</n-tag>
-                    <n-tag v-if="item.tag" size="tiny" :type="item.tagType">{{ item.tag }}</n-tag>
+            <Draggable
+              v-model="column.items"
+              item-key="id"
+              class="lane-body"
+              group="worklog"
+              :animation="220"
+              ghost-class="drag-ghost"
+              chosen-class="drag-chosen"
+              drag-class="drag-dragging"
+            >
+              <template #item="{ element }">
+                <n-card v-if="isItemVisible(element)" class="work-card" :bordered="false">
+                  <div class="card-header">
+                    <n-text class="card-title">{{ element.title }}</n-text>
+                    <div class="card-tags">
+                      <n-tag v-if="element.important" size="tiny" type="error">Quan trọng</n-tag>
+                      <n-tag v-if="element.tag" size="tiny" :type="element.tagType">
+                        {{ element.tag }}
+                      </n-tag>
+                    </div>
                   </div>
-                </div>
-                <n-text depth="3" class="card-meta">{{ item.meta }}</n-text>
-                <div class="card-footer">
-                  <n-tag size="small" type="info" round>{{ item.assignee }}</n-tag>
-                  <div class="card-due">
-                    <n-tag v-if="item.dueDate" size="tiny" type="warning">
-                      {{ formatDate(item.dueDate) }}
-                    </n-tag>
-                    <n-text depth="3">{{ item.time }}</n-text>
+                  <n-text depth="3" class="card-meta">{{ element.meta }}</n-text>
+                  <div class="card-footer">
+                    <n-tag size="small" type="info" round>{{ element.assignee }}</n-tag>
+                    <div class="card-due">
+                      <n-tag v-if="element.dueDate" size="tiny" type="warning">
+                        {{ formatDate(element.dueDate) }}
+                      </n-tag>
+                      <n-text depth="3">{{ element.time }}</n-text>
+                    </div>
                   </div>
+                </n-card>
+              </template>
+              <template #footer>
+                <div v-if="!visibleCount(column.items)" class="empty-state">
+                  <n-text depth="3">Kéo thả thẻ vào đây</n-text>
                 </div>
-              </n-card>
-              <div v-if="!column.items.length" class="empty-state">
-                <n-text depth="3">Kéo thả thẻ vào đây</n-text>
-              </div>
-            </transition-group>
+              </template>
+            </Draggable>
           </article>
         </section>
       </n-layout-content>
@@ -143,6 +142,7 @@ import {
   type GlobalThemeOverrides
 } from "naive-ui";
 import { computed, reactive, ref } from "vue";
+import Draggable from "vuedraggable";
 
 type WorkItem = {
   id: string;
@@ -172,7 +172,6 @@ const todayLabel = new Date().toLocaleDateString("vi-VN", {
 
 const newItemTitle = ref("");
 const dailyNote = ref("Ưu tiên: hoàn thành demo DailyWorkLog và gửi cập nhật EOD.");
-const dragOverColumn = ref<string | null>(null);
 const selectedDate = ref<number | null>(Date.now());
 const viewTab = ref<"today" | "week" | "future">("today");
 const newItemDueDate = ref<number | null>(Date.now());
@@ -241,13 +240,6 @@ const columns = reactive<WorkColumn[]>([
   }
 ]);
 
-const filteredColumns = computed(() => {
-  return columns.map((column) => ({
-    ...column,
-    items: filterItems(column.items)
-  }));
-});
-
 const importantSummary = computed(() => {
   const baseDate = startOfDay(getSelectedDate());
   const endDate = new Date(baseDate);
@@ -269,7 +261,7 @@ const themeOverrides: GlobalThemeOverrides = {
     primaryColor: "#2563eb",
     primaryColorHover: "#1d4ed8",
     borderRadius: "14px",
-    fontFamily: "\"Plus Jakarta Sans\", \"Inter\", system-ui, sans-serif"
+    fontFamily: "\"Roboto\", system-ui, sans-serif"
   },
   Card: {
     borderRadius: "18px",
@@ -295,64 +287,29 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-function filterItems(items: WorkItem[]) {
+function isItemVisible(item: WorkItem) {
   const baseDate = startOfDay(getSelectedDate());
   const endOfToday = new Date(baseDate);
   endOfToday.setDate(baseDate.getDate() + 1);
   const endOfWeek = new Date(baseDate);
   endOfWeek.setDate(baseDate.getDate() + 7);
-  return items.filter((item) => {
-    if (!item.dueDate) return viewTab.value === "today";
-    const due = new Date(item.dueDate);
-    if (viewTab.value === "today") {
-      return isSameDay(due, baseDate);
-    }
-    if (viewTab.value === "week") {
-      return due >= baseDate && due < endOfWeek;
-    }
-    return due >= endOfWeek;
-  });
+  if (!item.dueDate) return viewTab.value === "today";
+  const due = new Date(item.dueDate);
+  if (viewTab.value === "today") {
+    return isSameDay(due, baseDate);
+  }
+  if (viewTab.value === "week") {
+    return due >= baseDate && due < endOfWeek;
+  }
+  return due >= endOfWeek;
+}
+
+function visibleCount(items: WorkItem[]) {
+  return items.filter((item) => isItemVisible(item)).length;
 }
 
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("vi-VN", { day: "2-digit", month: "2-digit" });
-}
-
-function onDragStart(event: DragEvent, itemId: string, columnId: string) {
-  const payload = JSON.stringify({ itemId, columnId });
-  event.dataTransfer?.setData("text/plain", payload);
-  event.dataTransfer?.setDragImage(new Image(), 0, 0);
-}
-
-function onDragOver(columnId: string) {
-  dragOverColumn.value = columnId;
-}
-
-function onDragLeave() {
-  dragOverColumn.value = null;
-}
-
-function onDrop(event: DragEvent, targetColumnId: string) {
-  const payload = event.dataTransfer?.getData("text/plain");
-  dragOverColumn.value = null;
-  if (!payload) return;
-  const { itemId, columnId } = JSON.parse(payload) as { itemId: string; columnId: string };
-  if (columnId === targetColumnId) return;
-  moveItem(itemId, columnId, targetColumnId);
-}
-
-function onDragEnd() {
-  dragOverColumn.value = null;
-}
-
-function moveItem(itemId: string, fromColumnId: string, toColumnId: string) {
-  const fromColumn = columns.find((column) => column.id === fromColumnId);
-  const toColumn = columns.find((column) => column.id === toColumnId);
-  if (!fromColumn || !toColumn) return;
-  const itemIndex = fromColumn.items.findIndex((item) => item.id === itemId);
-  if (itemIndex === -1) return;
-  const [item] = fromColumn.items.splice(itemIndex, 1);
-  toColumn.items.unshift(item);
 }
 
 function addItem() {
@@ -386,7 +343,7 @@ function exportLog() {
 <style scoped>
 :global(body) {
   margin: 0;
-  font-family: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+  font-family: "Roboto", system-ui, sans-serif;
   background: #eef2ff;
   color: #0f172a;
 }
@@ -519,14 +476,6 @@ function exportLog() {
   padding: 16px;
   min-height: 420px;
   box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
-  transition: border 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-  border: 2px dashed transparent;
-}
-
-.lane--over {
-  border-color: rgba(37, 99, 235, 0.6);
-  box-shadow: 0 16px 40px rgba(37, 99, 235, 0.12);
-  transform: translateY(-2px);
 }
 
 .lane-header {
@@ -558,6 +507,7 @@ function exportLog() {
   border-radius: 16px;
   padding: 12px;
   background: linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(248, 250, 252, 0.9));
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
 .work-card:active {
@@ -607,19 +557,19 @@ function exportLog() {
   text-align: center;
 }
 
-.card-enter-active,
-.card-leave-active {
-  transition: all 0.3s ease;
+.drag-ghost {
+  opacity: 0.6;
+  box-shadow: none;
+  transform: scale(0.98);
 }
 
-.card-enter-from,
-.card-leave-to {
-  opacity: 0;
-  transform: translateY(8px) scale(0.98);
+.drag-chosen {
+  box-shadow: 0 18px 40px rgba(37, 99, 235, 0.18);
+  transform: scale(1.02);
 }
 
-.card-move {
-  transition: transform 0.3s ease;
+.drag-dragging {
+  cursor: grabbing;
 }
 
 @media (max-width: 900px) {
