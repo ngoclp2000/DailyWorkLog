@@ -1,3 +1,4 @@
+import cors from "cors";
 import express from "express";
 import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc.js";
@@ -7,6 +8,13 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 
 const app = express();
+app.use(
+  cors({
+    origin: ["http://localhost:3000"],
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"]
+  })
+);
 app.use(express.json({ limit: "1mb" }));
 
 const TIMEZONE = "Asia/Singapore";
