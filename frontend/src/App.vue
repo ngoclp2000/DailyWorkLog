@@ -395,6 +395,10 @@ function exportLog() {
   grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   gap: 18px;
   margin-bottom: 18px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.86);
+  border-radius: 20px;
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
 }
 
 .toolbar-left {
@@ -438,6 +442,10 @@ function exportLog() {
   gap: 16px;
   margin-bottom: 18px;
   flex-wrap: wrap;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 18px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
 }
 
 .filters-left {
@@ -468,6 +476,7 @@ function exportLog() {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
+  padding: 8px;
 }
 
 .lane {
