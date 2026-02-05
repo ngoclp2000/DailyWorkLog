@@ -15,6 +15,8 @@ export const createWorklogRouter = (
   const controller = new WorklogController(new WorklogService(worklogRepository));
 
   router.get("/worklog", authMiddleware(userRepository, tokenRepository), controller.getWorklog);
+  router.post("/worklog/items", authMiddleware(userRepository, tokenRepository), controller.createItem);
+  router.put("/worklog/items/reorder", authMiddleware(userRepository, tokenRepository), controller.reorderItems);
 
   return router;
 };

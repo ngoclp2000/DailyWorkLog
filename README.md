@@ -5,7 +5,7 @@ This repo contains a simple monorepo with separate `frontend` and `backend` fold
 ## Tech stack
 - Frontend: Vue 3 + TypeScript (Vite) + Naive UI
 - Backend: Node.js + Express
-- Database: MySQL (via `mysql2` dependency; not wired yet)
+- Database: MySQL (via `mysql2`)
 
 ## Development
 
@@ -16,9 +16,10 @@ npm install
 npm run dev
 ```
 
-**Default demo account**
-- Email: `demo@dailyworklog.vn`
-- Password: `password123`
+**Database config (backend)**
+- `DB_URL` (default: `mysql://root:@localhost:3306/dailyworklog`)
+
+Run the SQL schema in `backend/sql/init_dwl.sql` before starting the backend, and seed at least one user + worklog columns for your account.
 
 ### Frontend
 ```bash

@@ -4,8 +4,11 @@ import { CONFIG } from "../config.js";
 import { UserRepository } from "../repositories/UserRepository.js";
 import { TokenRepository } from "../repositories/TokenRepository.js";
 
-export const authMiddleware = (userRepository: UserRepository, tokenRepository: TokenRepository) => {
-  return (req: Request, res: Response, next: NextFunction) => {
+export const authMiddleware = (
+  userRepository: UserRepository,
+  tokenRepository: TokenRepository,
+) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     const header = req.headers.authorization;
     if (!header) {
       return res.status(401).json({ error: "Missing Authorization header" });
@@ -16,8 +19,13 @@ export const authMiddleware = (userRepository: UserRepository, tokenRepository: 
       return res.status(401).json({ error: "Invalid Authorization format" });
     }
 
-    if (tokenRepository.isRevoked(token)) {
-      return res.status(401).json({ error: "Token revoked" });
+    try {
+      if (await tokenRepository.isRevoked(token)) {
+        return res.status(401).json({ error: "Token revoked" });
+      }
+    } catch (error) {
+      console.error("Token validation error:", error);
+      return res.status(500).json({ error: "Failed to validate token" });
     }
 
     try {
@@ -27,14 +35,18 @@ export const authMiddleware = (userRepository: UserRepository, tokenRepository: 
         name: string;
       };
 
-      const user = userRepository.findById(payload.sub);
-      if (!user) {
-        return res.status(401).json({ error: "User not found" });
-      }
+      try {
+        const user = await userRepository.findById(payload.sub);
+        if (!user) {
+          return res.status(401).json({ error: "User not found" });
+        }
 
-      req.user = user;
-      req.token = token;
-      return next();
+        req.user = user;
+        req.token = token;
+        return next();
+      } catch (error) {
+        return res.status(500).json({ error: "Failed to load user" });
+      }
     } catch (error) {
       return res.status(401).json({ error: "Invalid token" });
     }

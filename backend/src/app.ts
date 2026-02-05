@@ -14,7 +14,7 @@ export const createApp = () => {
   app.use(
     cors({
       origin: CONFIG.corsOrigin,
-      methods: ["GET", "POST"],
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
       allowedHeaders: ["Content-Type", "Authorization"]
     })
   );
@@ -24,7 +24,7 @@ export const createApp = () => {
   const tokenRepository = new TokenRepository();
   const worklogRepository = new WorklogRepository();
 
-  app.use("/auth", createAuthRouter(userRepository, tokenRepository));
+  app.use("/auth", createAuthRouter(userRepository, tokenRepository, worklogRepository));
   app.use(createWorklogRouter(userRepository, tokenRepository, worklogRepository));
   app.use(createParseRouter(userRepository, tokenRepository));
 

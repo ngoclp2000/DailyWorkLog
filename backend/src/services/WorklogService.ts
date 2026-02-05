@@ -1,35 +1,79 @@
-import dayjs from "dayjs";
-import { WorklogRepository } from "../repositories/WorklogRepository.js";
+import { WorklogRepository, WorklogItemRecord } from "../repositories/WorklogRepository.js";
 import { WorklogColumn } from "../models/Worklog.js";
 
 export class WorklogService {
   constructor(private worklogRepository: WorklogRepository) {}
 
-  getColumns({
+  async getColumns({
     userId,
     assigneeName,
-    now,
     start,
     end
   }: {
     userId: string;
     assigneeName: string;
-    now: string;
     start?: string;
     end?: string;
-  }): WorklogColumn[] {
-    const startDate = start ? dayjs(start) : null;
-    const endDate = end ? dayjs(end) : null;
-    const columns = this.worklogRepository.buildColumns(userId, assigneeName, now);
-    if (!startDate || !endDate) return columns;
-
-    return columns.map((column) => ({
-      ...column,
-      items: column.items.filter((item) => {
-        if (!item.dueDate) return false;
-        const due = dayjs(item.dueDate);
-        return (due.isAfter(startDate) || due.isSame(startDate)) && (due.isBefore(endDate) || due.isSame(endDate));
-      })
-    }));
+  }): Promise<WorklogColumn[]> {
+    const columns = await this.worklogRepository.listColumns(userId);
+    const items = await this.worklogRepository.listItems(userId, start, end);
+    const columnMap = new Map<string, WorklogColumn>(
+      columns.map((column) => [column.id, { ...column, items: [] }])
+    );
+    for (const item of items) {
+      const column = columnMap.get(item.columnId);
+      if (!column) continue;
+      column.items.push(stripItemRecord(item));
+    }
+    return columns.map((column) => columnMap.get(column.id) ?? column);
   }
+
+  async createItem({
+    userId,
+    assigneeName,
+    columnId,
+    title,
+    dueDate,
+    important
+  }: {
+    userId: string;
+    assigneeName: string;
+    columnId: string;
+    title: string;
+    dueDate?: string;
+    important: boolean;
+  }) {
+    return this.worklogRepository.createItem({
+      userId,
+      columnId,
+      title,
+      assignee: assigneeName,
+      dueDate,
+      important
+    });
+  }
+
+  async reorderItems({
+    userId,
+    columns
+  }: {
+    userId: string;
+    columns: Array<{ columnId: string; itemIds: string[] }>;
+  }) {
+    await this.worklogRepository.reorderItems(userId, columns);
+  }
+}
+
+function stripItemRecord(item: WorklogItemRecord) {
+  return {
+    id: item.id,
+    title: item.title,
+    meta: item.meta,
+    assignee: item.assignee,
+    time: item.time,
+    tag: item.tag,
+    tagType: item.tagType,
+    dueDate: item.dueDate,
+    important: item.important
+  };
 }

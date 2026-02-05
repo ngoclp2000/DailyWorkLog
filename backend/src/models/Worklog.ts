@@ -6,7 +6,7 @@ export interface WorklogItem {
   time: string;
   tag?: string;
   tagType?: string;
-  dueDate: string;
+  dueDate?: string;
   important: boolean;
 }
 
